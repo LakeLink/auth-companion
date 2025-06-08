@@ -6,7 +6,7 @@ COPY . /app
 
 RUN go mod download
 
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-s -w" -o server exe/server/server.go
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags "-s -w" -o server exe/server/server.go
 
 FROM alpine:3.21
 

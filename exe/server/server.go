@@ -48,5 +48,8 @@ func main() {
 	gFeishu := e.Group("/feishu")
 	api.SetupFeishuEndpoints(gFeishu)
 
+	gNewApi := e.Group("/newapi")
+	api.SetupNewApiEndpoints(gNewApi)
+
 	e.Logger.Fatal(e.Start(viper.GetString("listen_addr")))
 }

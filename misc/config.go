@@ -19,6 +19,8 @@ func SetupConfig() {
 	viper.SetDefault("log.console", true)
 	viper.SetDefault("log.path", "auth_companion.log")
 
+	viper.SetDefault("newapi.db_path", "one-api.db")
+
 	// Check if config file exists
 	configFile := "config.toml"
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
