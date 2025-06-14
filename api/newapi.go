@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"errors"
 	"math/rand"
 	"net/http"
 	"time"
@@ -61,7 +62,11 @@ func (h *NewApiHandler) ensureToken(c echo.Context) error {
 	var user_id int
 	var username, oidc_id string
 	if err := row.Scan(&user_id, &username, &oidc_id); err != nil {
-		return c.String(http.StatusInternalServerError, err.Error())
+		if errors.Is(err, sql.ErrNoRows) {
+			return c.String(http.StatusNotFound, "user not found")
+		} else {
+			return c.String(http.StatusInternalServerError, err.Error())
+		}
 	}
 
 	log.Info().Int("user_id", user_id).Str("username", username).Str("oidc_id", oidc_id).Msg("user found")
@@ -93,7 +98,7 @@ func (h *NewApiHandler) ensureToken(c echo.Context) error {
 		return c.String(http.StatusInternalServerError, err.Error())
 	}
 
-	token = "sk-"+token;
+	token = "sk-" + token
 
 	return c.JSON(http.StatusOK, NewApiEnsureTokenResponse{token_id, token})
 }
