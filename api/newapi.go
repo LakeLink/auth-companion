@@ -93,5 +93,7 @@ func (h *NewApiHandler) ensureToken(c echo.Context) error {
 		return c.String(http.StatusInternalServerError, err.Error())
 	}
 
+	token = "sk-"+token;
+
 	return c.JSON(http.StatusOK, NewApiEnsureTokenResponse{token_id, token})
 }
