@@ -21,6 +21,15 @@ func SetupConfig() {
 
 	viper.SetDefault("newapi.db_path", "one-api.db")
 
+	viper.SetDefault("feishu.app_id", "")
+	viper.SetDefault("feishu.app_secret", "")
+	viper.SetDefault("feishu.verification_token", "")
+	viper.SetDefault("feishu.encrypt_key", "")
+
+	viper.SetDefault("zitadel.domain", "")
+	viper.SetDefault("zitadel.pat", "")
+	viper.SetDefault("zitadel.feishu_idp_id", "")
+
 	// Check if config file exists
 	configFile := "config.toml"
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {

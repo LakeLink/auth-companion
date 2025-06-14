@@ -1,16 +1,12 @@
-package api
+package out
 
 import (
 	"database/sql"
-	"errors"
 	"math/rand"
-	"net/http"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/viper"
 )
 
 const keyChars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -23,14 +19,8 @@ func RandStringBytes(n int) string {
 	return string(b)
 }
 
-type NewApiHandler struct {
+type NewApiActor struct {
 	db *sql.DB
-}
-
-type NewApiEnsureTokenRequest struct {
-	OidcUserId string `json:"oidc_user_id"`
-	TokenName  string `json:"token_name"`
-	TokenGroup string `json:"token_group"`
 }
 
 type NewApiEnsureTokenResponse struct {
@@ -38,35 +28,26 @@ type NewApiEnsureTokenResponse struct {
 	Token   string `json:"token"`
 }
 
-func SetupNewApiEndpoints(g *echo.Group) {
-	db, err := sql.Open("sqlite3", viper.GetString("newapi.db_path"))
+func NewNewApiActor(dbPath string) *NewApiActor {
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		panic(err)
 	}
 
-	h := &NewApiHandler{
+	h := &NewApiActor{
 		db: db,
 	}
-	g.POST("/ensure_token", h.ensureToken)
+
+	return h
 }
 
-func (h *NewApiHandler) ensureToken(c echo.Context) error {
-	var req NewApiEnsureTokenRequest
-	err := c.Bind(&req)
-	if err != nil {
-		return c.String(http.StatusBadRequest, "bad request")
-	}
-
-	row := h.db.QueryRow("SELECT id, username, oidc_id FROM users WHERE oidc_id = ? AND deleted_at IS NULL", req.OidcUserId)
+func (h *NewApiActor) EnsureToken(oidcUserId, tokenName, tokenGroup string) (*NewApiEnsureTokenResponse, error) {
+	row := h.db.QueryRow("SELECT id, username, oidc_id FROM users WHERE oidc_id = ? AND deleted_at IS NULL", oidcUserId)
 
 	var user_id int
 	var username, oidc_id string
 	if err := row.Scan(&user_id, &username, &oidc_id); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return c.String(http.StatusNotFound, "user not found")
-		} else {
-			return c.String(http.StatusInternalServerError, err.Error())
-		}
+		return nil, err
 	}
 
 	log.Info().Int("user_id", user_id).Str("username", username).Str("oidc_id", oidc_id).Msg("user found")
@@ -77,14 +58,14 @@ func (h *NewApiHandler) ensureToken(c echo.Context) error {
 		`INSERT INTO tokens(user_id, key, name, created_time, accessed_time, unlimited_quota, [group])
 		SELECT ?, ?, ?, ?, ?, 1, ?
 		WHERE NOT EXISTS (SELECT id FROM tokens WHERE user_id = ? AND name = ? AND deleted_at IS NULL)`,
-		user_id, RandStringBytes(48), req.TokenName, now, now, req.TokenGroup, user_id, req.TokenName,
+		user_id, RandStringBytes(48), tokenName, now, now, tokenGroup, user_id, tokenName,
 	)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, err.Error())
+		return nil, err
 	}
 
 	if n, err := res.RowsAffected(); err != nil {
-		return c.String(http.StatusInternalServerError, err.Error())
+		return nil, err
 	} else if n == 1 {
 		log.Info().Int("user_id", user_id).Str("username", username).Str("oidc_id", oidc_id).Msg("token created")
 	} else {
@@ -93,12 +74,12 @@ func (h *NewApiHandler) ensureToken(c echo.Context) error {
 
 	var token_id int
 	var token string
-	row = h.db.QueryRow("SELECT id, key FROM tokens WHERE user_id = ? AND name = ? AND deleted_at IS NULL", user_id, req.TokenName)
+	row = h.db.QueryRow("SELECT id, key FROM tokens WHERE user_id = ? AND name = ? AND deleted_at IS NULL", user_id, tokenName)
 	if err := row.Scan(&token_id, &token); err != nil {
-		return c.String(http.StatusInternalServerError, err.Error())
+		return nil, err
 	}
 
 	token = "sk-" + token
 
-	return c.JSON(http.StatusOK, NewApiEnsureTokenResponse{token_id, token})
+	return &NewApiEnsureTokenResponse{token_id, token}, nil
 }

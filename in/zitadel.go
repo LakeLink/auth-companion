@@ -1,4 +1,4 @@
-package api
+package in
 
 import (
 	"encoding/json"
@@ -29,8 +29,8 @@ type FeishuUserInfoResponse struct {
 	Msg string `json:"msg"`
 }
 
-func SetupFeishuEndpoints(g *echo.Group) {
-	g.GET("/user_info", handleFeishuUserInfo)
+func SetupZitadelEndpoints(g *echo.Group) {
+	g.GET("/feishu/user_info", handleFeishuUserInfo)
 }
 
 func handleFeishuUserInfo(c echo.Context) error {
