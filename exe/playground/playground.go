@@ -7,11 +7,11 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/lakelink/auth-companion/api"
+	"github.com/lakelink/auth-companion/in"
 )
 
 func main() {
-	j := api.NewApiEnsureTokenRequest{
+	j := in.OpenWebUiEnsureTokenRequest{
 		OidcUserId: "323283794821906439",
 		TokenName:  "test",
 		TokenGroup: "ultra",
