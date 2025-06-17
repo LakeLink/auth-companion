@@ -52,6 +52,8 @@ class Tools:
             return await self.__execute_enable_model_access__(user, __event_emitter__)
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             await __event_emitter__(
                 {
                     "type": "status",
@@ -99,6 +101,7 @@ class Tools:
             return await self.__emit_error__(
                 "User not found at LakeLink AI Aggregator.",
                 notification="Please first login using OIDC at https://ai.lklk.tech.",
+                emitter=__event_emitter__,
             )
         elif status != 200:
             return await self.__emit_error__(
