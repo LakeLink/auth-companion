@@ -1,7 +1,7 @@
 """
 title: LakeLink API Key Configurator
 author: yiffyi
-version: 0.1
+version: 1.0
 required_open_webui_version: 0.5.3
 """
 

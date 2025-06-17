@@ -54,6 +54,7 @@ func (h *NewApiActor) EnsureToken(oidcUserId, tokenName, tokenGroup string) (*Ne
 
 	now := time.Now().Unix()
 
+	// group is a SQL keyword
 	res, err := h.db.Exec(
 		`INSERT INTO tokens(user_id, key, name, created_time, accessed_time, unlimited_quota, [group])
 		SELECT ?, ?, ?, ?, ?, 1, ?
