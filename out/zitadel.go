@@ -20,7 +20,11 @@ type ZitadelActor struct {
 	feishuIdpId string
 }
 
-var ErrZitadelUserNotFound = errors.New("user not found in ZITADEL")
+var (
+	ErrZitadelUserNotFound  = errors.New("user not found in ZITADEL")
+	ErrZitadelRequireEnName = errors.New("the feishu user does not have larkcontact.UserEvent.EnName")
+	ErrZitadelRequireEmail  = errors.New("the feishu user does not have larkcontact.UserEvent.EnterpriseEmail")
+)
 
 func NewZitadelActor(domain, pat, feishuIdpId string) *ZitadelActor {
 	ctx := context.Background()
@@ -56,13 +60,31 @@ func (a *ZitadelActor) preflightFeishuUserEvent(e *larkcontact.UserEvent) error 
 	}
 
 	if e.EnName == nil {
-		return errors.New("larkcontact.UserEvent.EnName is nil")
+		return ErrZitadelRequireEnName
 	}
 
 	if e.EnterpriseEmail == nil {
-		return errors.New("larkcontact.UserEvent.EnterpriseEmail is nil")
+		return ErrZitadelRequireEmail
 	}
 	return nil
+}
+
+func (a *ZitadelActor) splitEnName(enName string) (string, string) {
+	familyName := ""
+	givenName := ""
+
+	names := strings.SplitN(enName, " ", 2)
+	if len(names) >= 1 {
+		givenName = names[0]
+	}
+
+	if len(names) >= 2 {
+		familyName = names[1]
+	} else {
+		log.Warn().Str("enName", enName).Int("splits", len(names)).Msg("this feishu user does not seem to have familyName")
+	}
+
+	return givenName, familyName
 }
 
 func (a *ZitadelActor) ListUsersByEmail(email string) (*user.ListUsersResponse, error) {
@@ -82,38 +104,28 @@ func (a *ZitadelActor) ListUsersByEmail(email string) (*user.ListUsersResponse, 
 	return respList, err
 }
 
-func (a *ZitadelActor) UpdateUserFromFeishu(e *larkcontact.UserEvent) (*user.UpdateHumanUserResponse, error) {
+func (a *ZitadelActor) UpdateUserFromFeishu(e *larkcontact.UserEvent) (resp *user.UpdateHumanUserResponse, userId string, err error) {
 	if err := a.preflightFeishuUserEvent(e); err != nil {
 		log.Error().Err(err).Str("action", "patch").Msg("missing essential fields for larkcontact.UserEvent. skipping ZITADEL sync")
-		return nil, errors.New("pre-flight check failed")
+		return nil, "", errors.New("pre-flight check failed")
 	}
 
 	respList, err := a.ListUsersByEmail(*e.EnterpriseEmail)
 
 	if err != nil {
 		log.Error().Err(err).Str("action", "patch").Str("loginName", *e.EnterpriseEmail).Msg("failed to list users")
-		return nil, err
+		return nil, "", err
 	}
 
 	if len(respList.Result) < 1 {
 		err = ErrZitadelUserNotFound
 		log.Error().Err(err).Str("action", "patch").Msg("skipping ZITADEL sync")
-		return nil, err
+		return nil, "", err
 	}
 
-	userId := respList.Result[0].GetUserId()
+	userId = respList.Result[0].GetUserId()
 
-	familyName := ""
-	givenName := ""
-
-	names := strings.SplitN(*e.EnName, " ", 2)
-	if len(names) == 2 {
-		familyName = names[0]
-	}
-
-	if len(names) >= 1 {
-		givenName = names[1]
-	}
+	givenName, familyName := a.splitEnName(*e.EnName)
 
 	req := &user.UpdateHumanUserRequest{
 		UserId:   userId,
@@ -131,7 +143,7 @@ func (a *ZitadelActor) UpdateUserFromFeishu(e *larkcontact.UserEvent) (*user.Upd
 		},
 	}
 
-	resp, err := a.api.UserServiceV2().UpdateHumanUser(a.ctx, req)
+	resp, err = a.api.UserServiceV2().UpdateHumanUser(a.ctx, req)
 
 	if err != nil {
 		log.Error().Str("userId", userId).Err(err).Msg("failed to update user")
@@ -163,26 +175,16 @@ func (a *ZitadelActor) UpdateUserFromFeishu(e *larkcontact.UserEvent) (*user.Upd
 		}
 	}
 
-	return resp, err
+	return resp, userId, err
 }
 
-func (a *ZitadelActor) AddUserFromFeishu(e *larkcontact.UserEvent) (*user.AddHumanUserResponse, error) {
+func (a *ZitadelActor) AddUserFromFeishu(e *larkcontact.UserEvent) (resp *user.AddHumanUserResponse, userId string, err error) {
 	if err := a.preflightFeishuUserEvent(e); err != nil {
 		log.Error().Err(err).Str("action", "add").Msg("missing essential fields for larkcontact.UserEvent. skipping ZITADEL sync")
-		return nil, errors.New("pre-flight check failed")
+		return nil, "", errors.New("pre-flight check failed")
 	}
 
-	familyName := ""
-	givenName := ""
-
-	names := strings.SplitN(*e.EnName, " ", 2)
-	if len(names) == 2 {
-		familyName = names[0]
-	}
-
-	if len(names) >= 1 {
-		givenName = names[1]
-	}
+	givenName, familyName := a.splitEnName(*e.EnName)
 
 	req := &user.AddHumanUserRequest{
 		Username: e.EnterpriseEmail,
@@ -234,43 +236,60 @@ func (a *ZitadelActor) AddUserFromFeishu(e *larkcontact.UserEvent) (*user.AddHum
 		}
 	}
 
-	resp, err := a.api.UserServiceV2().AddHumanUser(a.ctx, req)
+	resp, err = a.api.UserServiceV2().AddHumanUser(a.ctx, req)
 
 	if err != nil {
 		log.Error().Err(err).Str("loginName", *e.EnterpriseEmail).Str("enName", *e.EnName).Msg("failed to add user")
 	}
 
-	return resp, err
+	return resp, resp.GetUserId(), err
 }
 
-func (a *ZitadelActor) DeactivateUserFromFeishu(e *larkcontact.UserEvent) (*user.DeactivateUserResponse, error) {
+func (a *ZitadelActor) DeactivateUserFromFeishu(e *larkcontact.UserEvent) (userId string, err error) {
 	if e.EnterpriseEmail == nil {
 		err := errors.New("larkcontact.UserEvent.EnterpriseEmail is nil")
 		log.Error().Err(err).Str("action", "deactivate").Msg("missing essential fields for larkcontact.UserEvent. skipping ZITADEL sync")
-		return nil, err
+		return "", err
 	}
 
 	respList, err := a.ListUsersByEmail(*e.EnterpriseEmail)
 
 	if err != nil {
 		log.Error().Err(err).Str("action", "deactivate").Str("loginName", *e.EnterpriseEmail).Msg("failed to list ZITADEL users")
-		return nil, err
+		return "", err
 	}
 
 	if len(respList.Result) < 1 {
 		err = ErrZitadelUserNotFound
 		log.Error().Err(err).Str("action", "deactivate").Str("loginName", *e.EnterpriseEmail).Msg("skipping ZITADEL sync")
-		return nil, err
+		return "", err
 	}
 
-	userId := respList.Result[0].GetUserId()
-	req := &user.DeactivateUserRequest{
+	userId = respList.Result[0].GetUserId()
+	err = a.DeactivateUser(userId)
+	return userId, err
+}
+
+func (a *ZitadelActor) DeactivateUser(userId string) error {
+	_, err := a.api.UserServiceV2().DeactivateUser(a.ctx, &user.DeactivateUserRequest{
 		UserId: userId,
-	}
-	resp, err := a.api.UserServiceV2().DeactivateUser(a.ctx, req)
+	})
 
 	if err != nil {
-		log.Error().Err(err).Str("action", "deactivate").Str("loginName", *e.EnterpriseEmail).Str("userId", userId).Msg("failed to deactivate ZITADEL user")
+		log.Error().Err(err).Str("action", "deactivate").Str("userId", userId).Msg("failed to deactivate ZITADEL user")
 	}
-	return resp, err
+
+	return err
+}
+
+func (a *ZitadelActor) ReactivateUser(userId string) error {
+	_, err := a.api.UserServiceV2().ReactivateUser(a.ctx, &user.ReactivateUserRequest{
+		UserId: userId,
+	})
+
+	if err != nil {
+		log.Error().Err(err).Str("action", "reactivate").Str("userId", userId).Msg("could not reactivate user")
+	}
+
+	return err
 }
