@@ -7,6 +7,12 @@ import (
 	"github.com/spf13/viper"
 )
 
+type NewApiWebhookConfig struct {
+	Src   string
+	Actor string
+	Dst   string
+}
+
 func SetupConfig() {
 	// Set the file name and path (without extension)
 	viper.SetConfigName("config")
@@ -20,6 +26,11 @@ func SetupConfig() {
 	viper.SetDefault("log.path", "auth_companion.log")
 
 	viper.SetDefault("newapi.db_path", "one-api.db")
+	viper.SetDefault("newapi.webhooks", []NewApiWebhookConfig{
+		{
+			"default", "feishu", "open_id:ou_7d8a6e6df7621556ce0d21922b676706ccs",
+		},
+	})
 
 	viper.SetDefault("feishu.app_id", "")
 	viper.SetDefault("feishu.app_secret", "")

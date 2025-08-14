@@ -31,7 +31,7 @@ func StartFeishuListener(zitadelActor *out.ZitadelActor, done chan<- error) {
 	done <- err
 }
 
-func StartEchoListener(newApiActor *out.NewApiActor, done chan<- error) {
+func StartEchoListener(newApiActor *out.NewApiActor, feishuActor *out.FeishuActor, done chan<- error) {
 
 	e := echo.New()
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
@@ -68,6 +68,9 @@ func StartEchoListener(newApiActor *out.NewApiActor, done chan<- error) {
 
 	gOpenWebUi := e.Group("/open-webui")
 	SetupOpenWebUiEndpoints(gOpenWebUi, newApiActor)
+
+	gNewApi := e.Group("/new-api")
+	SetupNewApiEndpoints(gNewApi, feishuActor)
 
 	err := e.Start(viper.GetString("listen_addr"))
 	e.Logger.Fatal(err)

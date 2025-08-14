@@ -12,9 +12,10 @@ func main() {
 	misc.SetupLogger()
 
 	newApiActor := out.NewNewApiActor(viper.GetString("newapi.db_path"))
+	feishuActor := out.NewFeishuActor()
 	zitadelActor := out.NewZitadelActor(viper.GetString("zitadel.domain"), viper.GetString("zitadel.pat"), viper.GetString("zitadel.feishu_idp_id"))
 	done := make(chan error)
-	go in.StartEchoListener(newApiActor, done)
+	go in.StartEchoListener(newApiActor, feishuActor, done)
 	go in.StartFeishuListener(zitadelActor, done)
 	<-done
 }
