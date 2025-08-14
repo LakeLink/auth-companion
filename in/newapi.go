@@ -29,8 +29,8 @@ func (h *NewApiEventHandler) handleNotification(c echo.Context) error {
 	src := c.Param("source")
 
 	if dst, ok := h.dst[src]; ok {
-		body := newApiWebhookPayload{}
-		if err := c.Bind(body); err != nil {
+		var body newApiWebhookPayload
+		if err := c.Bind(&body); err != nil {
 			return err
 		}
 
