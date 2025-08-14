@@ -29,6 +29,14 @@ func (h *NewApiEventHandler) handleNotification(c echo.Context) error {
 	src := c.Param("source")
 
 	if dst, ok := h.dst[src]; ok {
+
+		receiver := strings.SplitN(dst, ":", 2)
+
+		if len(receiver) < 2 {
+			log.Error().Strs("receiver", receiver).Msg("incorrect dst, missing receive_id_type or receive_id")
+			return echo.NewHTTPError(http.StatusInternalServerError, "incorrect dst format")
+		}
+
 		var body newApiWebhookPayload
 		if err := c.Bind(&body); err != nil {
 			return err
@@ -44,14 +52,19 @@ func (h *NewApiEventHandler) handleNotification(c echo.Context) error {
 			Int64("timestamp", body.Timestamp).
 			Msg("received new webhook event")
 
-		receiver := strings.SplitN(dst, ":", 2)
-
-		if len(receiver) < 2 {
-			log.Error().Strs("receiver", receiver).Msg("incorrect dst, missing receive_id_type or receive_id")
-			return echo.NewHTTPError(http.StatusInternalServerError, "incorrect dst format")
+		content := body.Content
+		if len(body.Values) > 0 {
+			content = fmt.Sprintf(strings.ReplaceAll(body.Content, "{{value}}", "%+v"), body.Values...)
 		}
 
-		err := h.feishuActor.SendTextMessage(receiver[0], receiver[1], fmt.Sprintf("%s\n%s", body.Title, body.Content))
+		err := h.feishuActor.SendTextMessage(
+			receiver[0],
+			receiver[1],
+			fmt.Sprintf(
+				"Received: from %s\nFrom: %s\nSubject: %s\n\n%s",
+				c.RealIP(), src, body.Title, content,
+			),
+		)
 		return err
 	} else {
 		return echo.NewHTTPError(http.StatusNotFound, "src -> dst mapping not configured")

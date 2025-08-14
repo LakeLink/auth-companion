@@ -69,7 +69,7 @@ func StartEchoListener(newApiActor *out.NewApiActor, feishuActor *out.FeishuActo
 	gOpenWebUi := e.Group("/open-webui")
 	SetupOpenWebUiEndpoints(gOpenWebUi, newApiActor)
 
-	gNewApi := e.Group("/new-api")
+	gNewApi := e.Group("/newapi")
 	SetupNewApiEndpoints(gNewApi, feishuActor)
 
 	err := e.Start(viper.GetString("listen_addr"))
